@@ -40,7 +40,7 @@
             <div class="flex items-center gap-3">
                 <span id="minerStatusBadge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 transition-all duration-300">
 
-                    <span class="w-2 h-2 rounded-full bg-rose-500 mr-2 animate-pulse"></span> Stopped
+                    <span class="w-2 h-2 rounded-full bg-rose-500 mr-2"></span> Stopped
                 </span>
             </div>
         </div>
@@ -123,7 +123,7 @@
                 <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 shadow-xl">
                     <p class="text-xs font-medium text-slate-400 uppercase tracking-wider">Engine Performance</p>
                     <p class="text-2xl font-bold font-mono text-amber-400 mt-1" id="hashrateDisplay">0 <span class="text-xs font-sans text-slate-400">H/s</span></p>
-                    <p class="text-[10px] text-slate-500 mt-1">Native Web Crypto API throughput</p>
+                    <p class="text-[10px] text-slate-500 mt-1">Native Multi-threaded Hashing Subsystem</p>
                 </div>
                 <!-- Total Hashes Card -->
                 <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 shadow-xl">
@@ -140,7 +140,7 @@
             </div>
 
 
-            <!-- Terminal Output System Console Console -->
+            <!-- Terminal Output System Console -->
             <div class="bg-slate-950 border border-slate-800 rounded-xl shadow-xl flex flex-col flex-grow min-h-[250px]">
                 <div class="border-b border-slate-800 px-4 py-3 flex justify-between items-center bg-slate-950 rounded-t-xl">
                     <h3 class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Live Output Pipeline</h3>
@@ -169,7 +169,6 @@
                             </tr>
                         </thead>
                         <tbody id="blockTableBody" class="divide-y divide-slate-900 text-slate-300">
-                            <!-- Injected rows will go here -->
                             <tr id="emptyTablePlaceholder">
                                 <td colspan="3" class="py-4 text-center text-slate-500 italic">No hashes matching target parameters found yet. Click start to process.</td>
                             </tr>
@@ -216,16 +215,71 @@
         const blockTableBodyElement = document.getElementById('blockTableBody');
         const emptyTablePlaceholderElement = document.getElementById('emptyTablePlaceholder');
 
-        0; // Context separation guard
-
-        // Inline definition for Background Workers to comply with strict single file sandbox mandates.
-        // It utilizes the modern browser native Web Crypto Framework to execute genuine, secure SHA-256 block passes.
-
+        // Inline definition for Background Workers.
+        // Implements a clean mathematical pure JS fallback for environments lacking crypto.subtle context profiles (e.g. file:// local openings).
         const internalWorkerScript = `
             let keepMining = false;
+
             let hashPrefixString = '00';
 
+            // Pure Javascript fallback implementation of SHA-256 algorithm
+            function pureJsSha256(ascii) {
+                function ror(X, n) { return (X >>> n) | (X << (32 - n)); }
+                function ch(x, y, z) { return (x & y) ^ (~x & z); }
+                function maj(x, y, z) { return (x & y) ^ (x & z) ^ (y & z); }
+                function sigma0(x) { return ror(x, 2) ^ ror(x, 13) ^ ror(x, 22); }
+                function sigma1(x) { return ror(x, 6) ^ ror(x, 11) ^ ror(x, 25); }
+                function gamma0(x) { return ror(x, 7) ^ ror(x, 18) ^ (x >>> 3); }
+                function gamma1(x) { return ror(x, 17) ^ ror(x, 19) ^ (x >>> 10); }
+
+                var K = [
+                    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+                    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+                    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+                    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+                    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+                    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+
+                    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+                    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+                ];
+
+                var HASH = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+                var words = [];
+                var asciiLength = ascii.length;
+                for (var i = 0; i < asciiLength; i++) {
+                    words[i >> 2] |= (ascii.charCodeAt(i) & 0xff) << (24 - (i % 4) * 8);
+                }
+                words[asciiLength >> 2] |= 0x80 << (24 - (asciiLength % 4) * 8);
+                var wordsLength = ((asciiLength + 8) >> 6) + 1 << 4;
+                while (words.length < wordsLength) { words.push(0); }
+                words[wordsLength - 1] = asciiLength * 8;
+
+                for (var i = 0; i < words.length; i += 16) {
+                    var w = words.slice(i, i + 16);
+                    var a = HASH[0], b = HASH[1], c = HASH[2], d = HASH[3], e = HASH[4], f = HASH[5], g = HASH[6], h = HASH[7];
+
+
+                    for (var j = 0; j < 64; j++) {
+                        if (j >= 16) {
+                            w[j] = (gamma1(w[j - 2]) + w[j - 7] + gamma0(w[j - 15]) + w[j - 16]) | 0;
+                        }
+                        var t1 = (h + sigma1(e) + ch(e, f, g) + K[j] + w[j]) | 0;
+                        var t2 = (sigma0(a) + maj(a, b, c)) | 0;
+                        h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+                    }
+                    HASH[0] = (HASH[0] + a) | 0; HASH[1] = (HASH[1] + b) | 0; HASH[2] = (HASH[2] + c) | 0; HASH[3] = (HASH[3] + d) | 0;
+                    HASH[4] = (HASH[4] + e) | 0; HASH[5] = (HASH[5] + f) | 0; HASH[6] = (HASH[6] + g) | 0; HASH[7] = (HASH[7] + h) | 0;
+                }
+
+                return HASH.map(function(x) {
+                    var s = (x >>> 0).toString(16);
+                    return "00000000".substring(s.length) + s;
+                }).join('');
+            }
+
             self.onmessage = async function(event) {
+
                 const message = event.data;
                 if (message.command === 'START_THREADS') {
                     keepMining = true;
@@ -240,29 +294,40 @@
                 let currentNonce = startingNonce;
                 let incrementalHashes = 0;
                 let clockTimeAnchor = Date.now();
-
                 const textByteEncoder = new TextEncoder();
+                
+                // Determine context availability of browser Crypto engine infrastructure natively
+                const cryptoAvailable = (self.crypto && self.crypto.subtle && typeof self.crypto.subtle.digest === 'function');
+                
+
+                if (!cryptoAvailable) {
+                    self.postMessage({ event: 'CONTEXT_WARNING', notice: 'Insecure Context Framework / Local File Path detected. Falling back to Pure JS Math Execution Core.' });
+                }
 
                 while (keepMining) {
-                    // Reconstruct block structural payload context string
                     const computationalBlockPayload = previousHash + currentNonce;
-                    const encodedByteArray = textByteEncoder.encode(computationalBlockPayload);
-                    
-                    // Native performance hardware-accelerated cryptographic processing pass
-                    const calculatedHashBuffer = await crypto.subtle.digest('SHA-256', encodedByteArray);
-                    
-                    // Transformation processing array map to Hexadecimal layout representations
-                    const allocationByteArray = new Uint8Array(calculatedHashBuffer);
                     let computedHexadecimalHash = '';
-                    for (let index = 0; index < allocationByteArray.length; index++) {
-                        const hexadecimalPaddedCharacter = allocationByteArray[index].toString(16);
-                        computedHexadecimalHash += hexadecimalPaddedCharacter.length === 1 ? '0' + hexadecimalPaddedCharacter : hexadecimalPaddedCharacter;
+
+                    if (cryptoAvailable) {
+                        try {
+                            const encodedByteArray = textByteEncoder.encode(computationalBlockPayload);
+                            const calculatedHashBuffer = await self.crypto.subtle.digest('SHA-256', encodedByteArray);
+                            const allocationByteArray = new Uint8Array(calculatedHashBuffer);
+                            for (let index = 0; index < allocationByteArray.length; index++) {
+                                const hexadecimalPaddedCharacter = allocationByteArray[index].toString(16);
+                                computedHexadecimalHash += hexadecimalPaddedCharacter.length === 1 ? '0' + hexadecimalPaddedCharacter : hexadecimalPaddedCharacter;
+                            }
+                        } catch (cryptoErr) {
+                            // Fall back immediately if execution throws unexpected runtime limits
+
+                            computedHexadecimalHash = pureJsSha256(computationalBlockPayload);
+                        }
+                    } else {
+                        computedHexadecimalHash = pureJsSha256(computationalBlockPayload);
                     }
 
                     incrementalHashes++;
 
-
-                    // Structural verification against leading zeros condition requirements
                     if (computedHexadecimalHash.indexOf(hashPrefixString) === 0) {
                         self.postMessage({
                             event: 'SUCCESSFUL_MATCH_FOUND',
@@ -271,91 +336,13 @@
                         });
                     }
 
-                    // Periodic performance thread throttling and interface notification checks
-                    if (incrementalHashes >= 250 || (Date.now() - clockTimeAnchor) > 500) {
+                    if (incrementalHashes >= 400 || (Date.now() - clockTimeAnchor) > 300) {
                         self.postMessage({
                             event: 'PROGRESS_UPDATE',
+
                             hashCyclesCompleted: incrementalHashes
                         });
                         incrementalHashes = 0;
                         clockTimeAnchor = Date.now();
                         
-                        // Explicit thread yielding step prevent DOM runtime task starving hangs
-
-                        await new Promise(resolve => setTimeout(resolve, 0));
-                    }
-                    currentNonce++;
-                }
-            }
-        `;
-
-        // Create virtualized background thread allocations inside standalone sandbox space safely
-        const compiledBlobObject = new Blob([internalWorkerScript], { type: 'application/javascript' });
-        const virtualizedWorkerURL = URL.createObjectURL(compiledBlobObject);
-        let trackingWebWorkerInstance = null;
-
-        // Logging utilities function
-        function printToTerminal(text, type = 'info') {
-            const entryElement = document.createElement('div');
-            const timestampString = new Date().toLocaleTimeString();
-            
-            let colorModifier = 'text-slate-400';
-            if (type === 'success') colorModifier = 'text-emerald-400 font-medium';
-
-            if (type === 'warning') colorModifier = 'text-amber-400';
-            if (type === 'error') colorModifier = 'text-rose-400';
-            
-            entryElement.innerHTML = \`<span class="text-slate-600">[\${timestampString}]</span> <span class="\${colorModifier}">\${text}</span>\`;
-            terminalLogElement.appendChild(entryElement);
-            terminalLogElement.scrollTop = terminalLogElement.scrollHeight;
-        }
-
-        // Initialize persistent local storage configuration systems values safely
-        function initializeLocalStorageData() {
-            try {
-                const storedPayload = localStorage.getItem('core_miner_state_v1');
-                if (storedPayload) {
-                    const parsedState = JSON.parse(storedPayload);
-                    appState.totalCumulativeHashes = parsedState.totalCumulativeHashes || 0;
-                    appState.discoveredBlocks = parsedState.discoveredBlocks || [];
-                    printToTerminal('Recovered state profiles metrics cleanly from device database storage layers.');
-                } else {
-                    saveStateToLocalStorage();
-
-                }
-            } catch (error) {
-                printToTerminal('Storage subsystem access initialization warning. Memory execution fallback used.', 'warning');
-            }
-            synchronizeUserInterfaceDisplays();
-        }
-
-        function saveStateToLocalStorage() {
-            try {
-                const serializedStringData = JSON.stringify(appState);
-                localStorage.setItem('core_miner_state_v1', serializedStringData);
-                
-                // Track physical footprint sizes for storage reporting dashboards metric logs
-                const spatialByteCount = new Blob([serializedStringData]).size;
-                storageStatsElement.textContent = \`\${spatialByteCount.toLocaleString()} Bytes\`;
-            } catch (error) {
-                storageStatsElement.textContent = 'Volatile Memory Context';
-            }
-        }
-
-
-        function synchronizeUserInterfaceDisplays() {
-            totalHashesDisplayElement.textContent = appState.totalCumulativeHashes.toLocaleString();
-            sessionHashesDisplayElement.textContent = \`Session: \${currentSessionHashes.toLocaleString()}\`;
-            blocksFoundDisplayElement.textContent = appState.discoveredBlocks.length.toString();
-            
-            // Clear existing elements, preserve placeholder structure if zero entries present
-            while(blockTableBodyElement.firstChild) {
-                blockTableBodyElement.removeChild(blockTableBodyElement.firstChild);
-            }
-
-            if (appState.discoveredBlocks.length === 0) {
-                blockTableBodyElement.appendChild(emptyTablePlaceholderElement);
-            } else {
-                // Layout latest entries safely into structured tabular layout positions
-                // Sort to display most recent discoveries first
-             
+                        await new Promise
